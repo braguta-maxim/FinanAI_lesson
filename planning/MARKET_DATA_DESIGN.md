@@ -9,13 +9,13 @@
 |---|---|
 | `PLAN.md` §3, §5–§8 | контракт: `MOEX_ENABLED`, тикеры, SSE-формат, порядок старта, правила трейдов |
 | `MOEX_API.md` | эндпоинты ISS, формат `columns/data`, задержка 15 мин, пустой `data` для неизвестного тикера |
-| `MARKET_INTERFACE.md`, `MARKET_SIMULATOR.md`, `MARKET_DATA_SUMMARY.md` | уже написанный код `backend/app/market/` (интерфейс, кэш, GBM, SSE) |
-| `REVIEW.md`, `CODE_REVIEW.md` | исправленные ранее ошибки (гонка в `remove_ticker`, роутер SSE в фабрике и т.д.) — не повторяем |
-| `MASSIVE_API.md` | только как история: Massive **удаляется** из кода |
+| `archive/pre-moex/MARKET_INTERFACE.md`, `archive/pre-moex/MARKET_SIMULATOR.md`, `MARKET_DATA_SUMMARY.md` | уже написанный код `backend/app/market/` (интерфейс, кэш, GBM, SSE) |
+| `REVIEW.md`, `archive/pre-moex/CODE_REVIEW.md` | исправленные ранее ошибки (гонка в `remove_ticker`, роутер SSE в фабрике и т.д.) — не повторяем |
+| `archive/pre-moex/MASSIVE_API.md` | только как история: Massive **удаляется** из кода |
 
 > **Состояние кода.** Реализованный `backend/app/market/` всё ещё Massive/US (`massive_client.py`, тикеры
 > AAPL…, цены в $). Этот документ описывает, что оставить, что изменить и что добавить. Документы
-> `MARKET_INTERFACE.md` / `MARKET_SIMULATOR.md` / `MARKET_DATA_SUMMARY.md` и `backend/CLAUDE.md` после
+> `archive/pre-moex/MARKET_INTERFACE.md` / `archive/pre-moex/MARKET_SIMULATOR.md` / `MARKET_DATA_SUMMARY.md` и `backend/CLAUDE.md` после
 > реализации надо обновить под MOEX (см. §15).
 
 ---
@@ -293,7 +293,7 @@ class MarketDataSource(ABC):
         return SourceStatus(source=type(self).__name__, healthy=True, delay_seconds=0)
 ```
 
-Контракт (из `MARKET_INTERFACE.md` §2, остаётся в силе): `start()` вызывается один раз с
+Контракт (из `archive/pre-moex/MARKET_INTERFACE.md` §2, остаётся в силе): `start()` вызывается один раз с
 `watchlist ∪ positions`; `add/remove_ticker` идемпотентны; `remove_ticker` сам чистит кэш; `stop()`
 безопасен при повторном вызове; **тикеры приходят уже нормализованными** (`normalize_ticker`).
 
@@ -1669,7 +1669,7 @@ dependencies = [
 3. **История и аналитика**: `history.py`, `analytics.py`, `sessions.py` + тесты (чистые функции — можно
    параллельно с шагом 2).
 4. **API**: `api.py`, подключение в `create_app`, `test_api.py`.
-5. **Документация**: обновить `MARKET_DATA_SUMMARY.md`, `MARKET_INTERFACE.md`, `MARKET_SIMULATOR.md`,
+5. **Документация**: обновить `MARKET_DATA_SUMMARY.md`, `archive/pre-moex/MARKET_INTERFACE.md`, `archive/pre-moex/MARKET_SIMULATOR.md`,
    `backend/CLAUDE.md`, `backend/README.md`, `market_data_demo.py` (тикеры MOEX); добавить §12 в PLAN.md (§16).
 
 ---

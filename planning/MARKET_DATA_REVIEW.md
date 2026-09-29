@@ -88,7 +88,7 @@ happen to be small in line count but large in what they're responsible for.
 
 ## 2. Architecture Assessment
 
-The subsystem cleanly extends the pre-MOEX design (`MARKET_INTERFACE.md`, `MARKET_SIMULATOR.md`)
+The subsystem cleanly extends the pre-MOEX design (`archive/pre-moex/MARKET_INTERFACE.md`, `archive/pre-moex/MARKET_SIMULATOR.md`)
 rather than replacing its shape:
 
 ```
@@ -114,10 +114,10 @@ CandleService (TTL cache + de-dup + stale-if-error)
 - The price fallback chain (`LAST` → `LCURRENTPRICE` → `LCLOSEPRICE` → `PREVPRICE`) is exactly
   what `MARKET_DATA_DESIGN.md` §16.1 asked to verify, and it does the right thing on the fixture
   that models an untraded-today ticker.
-- CODE_REVIEW.md's H3 (a ticker removed mid-poll must not be resurrected) is carried forward
+- `archive/pre-moex/CODE_REVIEW.md`'s H3 (a ticker removed mid-poll must not be resurrected) is carried forward
   correctly into `MoexDataSource._poll` and has a dedicated, passing regression test.
 - `dt` is now derived from `update_interval * time_scale` instead of being a hardcoded constant —
-  this actually fixes a documented latent issue from `MARKET_SIMULATOR.md` §6 (the old `dt` and
+  this actually fixes a documented latent issue from `archive/pre-moex/MARKET_SIMULATOR.md` §6 (the old `dt` and
   `update_interval` could silently drift apart).
 - The Cholesky-PSD argument for the sector correlation matrix still holds with three groups of
   different correlation values, not just the old two-group case (verified by hand in this review:
@@ -136,7 +136,7 @@ CandleService (TTL cache + de-dup + stale-if-error)
 ### 3.1 A non-normalized ticker silently never gets a price from MOEX (Severity: Medium-High)
 
 `MoexDataSource.add_ticker`/`start` do not normalize their input (no `.strip().upper()`), unlike
-the retired `MassiveDataSource`, which did this defensively. `MARKET_INTERFACE.md` §7 explicitly
+the retired `MassiveDataSource`, which did this defensively. `archive/pre-moex/MARKET_INTERFACE.md` §7 explicitly
 noted that defensive normalization "protects direct callers such as tests or the demo script" —
 that protection is now gone from the MOEX path, and the failure mode is worse than before: it is
 **silent**, not an error.

@@ -1,7 +1,7 @@
 # MOEX ISS API Research
 
 Research notes on the Moscow Exchange's **ISS** (Informational & Statistical Server) API for retrieving stock
-prices, as a possible market data source alongside or instead of Massive (`MASSIVE_API.md`). Everything below
+prices, as a possible market data source alongside or instead of Massive (`archive/pre-moex/MASSIVE_API.md`). Everything below
 was verified with live requests against `https://iss.moex.com` on 2026-09-29 (not just read from docs) —
 example commands are included so the results can be reproduced.
 
@@ -13,7 +13,7 @@ example commands are included so the results can be reproduced.
 | Subscription | Paid (contract with MOEX) | Real-time | Session cookie from a login endpoint |
 
 **No API key is required for the free tier at all** — every example in this document is an unauthenticated
-`GET` request. This is a meaningfully better starting point than Massive: `MASSIVE_API.md` §1 found that
+`GET` request. This is a meaningfully better starting point than Massive: `archive/pre-moex/MASSIVE_API.md` §1 found that
 Massive's free Basic tier is end-of-day only (yesterday's closing price, frozen all session) and that a
 *live-ish* price needs a paid Starter plan ($29/mo). MOEX's free tier gives a **continuously updating** price,
 just ~15 minutes behind the real market — good enough to "watch prices stream" (PLAN.md §2) without spending
@@ -205,5 +205,5 @@ async def poll_once(session: aiohttp.ClientSession, tickers: list[str]) -> dict[
 MOEX's free tier is strictly more useful than Massive's free tier for a live-updating demo, at the cost of
 covering a different market (Russian stocks, not US ones). It cannot serve as a drop-in *replacement* for
 Massive if the product's identity is "watch AAPL/GOOGL/TSLA stream" — that requires switching the default
-watchlist and currency to match. See `MARKET_INTERFACE.md` for how a `MoexDataSource` fits the existing
+watchlist and currency to match. See `archive/pre-moex/MARKET_INTERFACE.md` for how a `MoexDataSource` fits the existing
 `MarketDataSource` interface, and the open decision on how it coexists with the US-market path.

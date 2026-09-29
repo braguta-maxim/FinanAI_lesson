@@ -53,7 +53,7 @@ CandleService (TTL cache + dedup + stale-if-error)
 - **Strategy pattern** — both data sources implement the same ABC; downstream code is source-agnostic.
 - **PriceCache as single point of truth** — producers write, consumers read; no direct coupling.
 - **No API key for real data** — MOEX ISS's free/anonymous tier needs no registration, unlike the
-  Massive/Polygon path it replaces (see `planning/MASSIVE_API.md` for why that path was dropped:
+  Massive/Polygon path it replaces (see `planning/archive/pre-moex/MASSIVE_API.md` for why that path was dropped:
   its free tier has no snapshot endpoint at all).
 - **GBM with correlated moves** — Cholesky decomposition of a sector-based correlation matrix;
   banks and oil & gas correlate at 0.6, metals at 0.5, cross-sector/telecom/unknown at 0.3. `dt` is

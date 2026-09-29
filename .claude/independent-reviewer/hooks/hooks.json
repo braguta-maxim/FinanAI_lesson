@@ -1,0 +1,14 @@
+{
+    "hooks": {
+        "Stop": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "[ -n \"$INDEPENDENT_REVIEWER_RUNNING\" ] || INDEPENDENT_REVIEWER_RUNNING=1 claude -p \"Review changes since last commit and write results to a file named planning/REVIEW.md\" --allowedTools \"Read,Write,Bash(git diff:*),Bash(git status:*),Bash(git log:*)\""
+                    }
+                ]
+            }
+        ]
+    }
+}

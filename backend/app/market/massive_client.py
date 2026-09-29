@@ -97,15 +97,13 @@ class MassiveDataSource(MarketDataSource):
             snapshots = await asyncio.to_thread(self._fetch_snapshots)
             processed = 0
             for snap in snapshots:
+                # Skip tickers removed while the poll was in flight
+                if snap.ticker not in self._tickers:
+                    continue
                 try:
-                    price = snap.last_trade.price
-                    # Massive timestamps are Unix milliseconds → convert to seconds
-                    timestamp = snap.last_trade.timestamp / 1000.0
-                    self._cache.update(
-                        ticker=snap.ticker,
-                        price=price,
-                        timestamp=timestamp,
-                    )
+                    # The cache stamps the update with the poll time; the vendor
+                    # trade timestamp (nanoseconds) can be stale for illiquid tickers.
+                    self._cache.update(ticker=snap.ticker, price=snap.last_trade.price)
                     processed += 1
                 except (AttributeError, TypeError) as e:
                     logger.warning(

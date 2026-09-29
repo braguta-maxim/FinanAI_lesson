@@ -1,21 +1,20 @@
 """Tests for MassiveDataSource (mocked)."""
 
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+from massive.rest.models import TickerSnapshot
 
 from app.market.cache import PriceCache
 from app.market.massive_client import MassiveDataSource
 
 
-def _make_snapshot(ticker: str, price: float, timestamp_ms: int) -> MagicMock:
-    """Create a mock Massive snapshot object."""
-    snap = MagicMock()
-    snap.ticker = ticker
-    snap.last_trade = MagicMock()
-    snap.last_trade.price = price
-    snap.last_trade.timestamp = timestamp_ms
-    return snap
+def _make_snapshot(ticker: str, price: float, sip_timestamp_ns: int) -> TickerSnapshot:
+    """Create a snapshot with the real Massive model (timestamps are nanoseconds)."""
+    return TickerSnapshot.from_dict(
+        {"ticker": ticker, "lastTrade": {"p": price, "t": sip_timestamp_ns}}
+    )
 
 
 @pytest.mark.asyncio
@@ -83,8 +82,8 @@ class TestMassiveDataSource:
 
         assert cache.get_price("AAPL") is None  # No update happened
 
-    async def test_timestamp_conversion(self):
-        """Test that timestamps are converted from milliseconds to seconds."""
+    async def test_timestamp_is_poll_time(self):
+        """Test that the cache timestamp is the poll time, not the vendor trade time."""
         cache = PriceCache()
         source = MassiveDataSource(
             api_key="test-key",
@@ -96,12 +95,13 @@ class TestMassiveDataSource:
 
         mock_snapshots = [_make_snapshot("AAPL", 190.50, 1707580800000)]
 
+        before = time.time()
         with patch.object(source, "_fetch_snapshots", return_value=mock_snapshots):
             await source._poll_once()
 
         update = cache.get("AAPL")
         assert update is not None
-        assert update.timestamp == 1707580800.0  # Converted to seconds
+        assert before <= update.timestamp <= time.time()
 
     async def test_add_ticker(self):
         """Test adding a ticker."""
@@ -137,6 +137,29 @@ class TestMassiveDataSource:
         await source.remove_ticker("AAPL")
         assert "AAPL" not in source.get_tickers()
         assert cache.get("AAPL") is None
+
+    async def test_ticker_removed_during_poll_stays_out_of_cache(self):
+        """Test that a ticker removed while a poll is in flight is not written back."""
+        cache = PriceCache()
+        source = MassiveDataSource(api_key="test-key", price_cache=cache)
+        source._tickers = ["AAPL", "GOOGL"]
+        source._client = MagicMock()
+
+        snapshots = [
+            _make_snapshot("AAPL", 190.50, 1707580800000000000),
+            _make_snapshot("GOOGL", 175.25, 1707580800000000000),
+        ]
+
+        def fetch_and_remove_meanwhile():
+            source._tickers = ["GOOGL"]  # remove_ticker("AAPL") lands mid-poll
+            cache.remove("AAPL")
+            return snapshots
+
+        with patch.object(source, "_fetch_snapshots", side_effect=fetch_and_remove_meanwhile):
+            await source._poll_once()
+
+        assert cache.get("AAPL") is None
+        assert cache.get_price("GOOGL") == 175.25
 
     async def test_get_tickers(self):
         """Test getting the list of active tickers."""

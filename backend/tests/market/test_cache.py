@@ -66,6 +66,21 @@ class TestPriceCache:
         cache.update("AAPL", 191.00)
         assert cache.version == v0 + 2
 
+    def test_remove_increments_version(self):
+        """Test that removing a ticker bumps the version so SSE pushes the change."""
+        cache = PriceCache()
+        cache.update("AAPL", 190.00)
+        v0 = cache.version
+        cache.remove("AAPL")
+        assert cache.version == v0 + 1
+
+    def test_remove_nonexistent_keeps_version(self):
+        """Test that removing an unknown ticker is not a state change."""
+        cache = PriceCache()
+        v0 = cache.version
+        cache.remove("NOPE")
+        assert cache.version == v0
+
     def test_get_price_convenience(self):
         """Test the convenience get_price method."""
         cache = PriceCache()

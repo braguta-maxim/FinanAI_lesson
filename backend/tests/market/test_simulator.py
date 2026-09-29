@@ -77,6 +77,22 @@ class TestGBMSimulator:
         # Price should have changed (extremely unlikely to be exactly the seed)
         assert final_price != initial_price
 
+    def test_random_event_moves_price_2_to_5_percent(self):
+        """With event_probability=1.0 every tick is a 2-5% shock on top of the tiny GBM move."""
+        sim = GBMSimulator(tickers=["AAPL"], event_probability=1.0)
+        for _ in range(50):
+            before = sim.get_price("AAPL")
+            after = sim.step()["AAPL"]
+            assert 0.019 <= abs(after / before - 1) <= 0.051
+
+    def test_no_events_when_probability_zero(self):
+        """With event_probability=0 a single tick stays within GBM noise (well under 1%)."""
+        sim = GBMSimulator(tickers=["AAPL"], event_probability=0.0)
+        for _ in range(50):
+            before = sim.get_price("AAPL")
+            after = sim.step()["AAPL"]
+            assert abs(after / before - 1) < 0.01
+
     def test_cholesky_rebuilds_on_add(self):
         """Test that Cholesky matrix is rebuilt when tickers are added."""
         sim = GBMSimulator(tickers=["AAPL"])

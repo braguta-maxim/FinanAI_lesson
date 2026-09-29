@@ -14,14 +14,13 @@ from .cache import PriceCache
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/stream", tags=["streaming"])
-
 
 def create_stream_router(price_cache: PriceCache) -> APIRouter:
     """Create the SSE streaming router with a reference to the price cache.
 
     This factory pattern lets us inject the PriceCache without globals.
     """
+    router = APIRouter(prefix="/api/stream", tags=["streaming"])
 
     @router.get("/prices")
     async def stream_prices(request: Request) -> StreamingResponse:
@@ -40,7 +39,6 @@ def create_stream_router(price_cache: PriceCache) -> APIRouter:
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
                 "X-Accel-Buffering": "no",  # Disable nginx buffering if proxied
             },
         )
@@ -83,5 +81,5 @@ async def _generate_events(
                     yield f"data: {payload}\n\n"
 
             await asyncio.sleep(interval)
-    except asyncio.CancelledError:
-        logger.info("SSE stream cancelled for: %s", client_ip)
+    finally:
+        logger.info("SSE stream closed: %s", client_ip)

@@ -98,15 +98,24 @@ class TestSimulatorDataSource:
         cache = PriceCache()
         source = SimulatorDataSource(price_cache=cache, update_interval=0.05)
 
-        # Start with a valid ticker
         await source.start(["AAPL"])
+        version_before = cache.version
 
-        # Wait for some updates
-        await asyncio.sleep(0.15)
+        # The first step raises; the loop must survive and keep updating the cache
+        real_step = source._sim.step
+        calls = {"n": 0}
 
-        # Task should still be running
-        assert source._task is not None
-        assert not source._task.done()
+        def flaky_step():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("boom")
+            return real_step()
+
+        source._sim.step = flaky_step
+        await asyncio.sleep(0.3)
+
+        assert calls["n"] > 1
+        assert cache.version > version_before
 
         await source.stop()
 
@@ -122,17 +131,4 @@ class TestSimulatorDataSource:
         # Should have multiple updates with fast interval
         assert cache.version > initial_version + 2
 
-        await source.stop()
-
-    async def test_custom_event_probability(self):
-        """Test creating source with custom event probability."""
-        cache = PriceCache()
-        # Very high event probability for testing
-        source = SimulatorDataSource(
-            price_cache=cache, update_interval=0.1, event_probability=1.0
-        )
-        await source.start(["AAPL"])
-
-        # Just verify it starts and stops cleanly
-        await asyncio.sleep(0.2)
         await source.stop()

@@ -1,0 +1,19 @@
+{
+    "name": "ed-tools",
+    "description": "Course tools: independent review of changes since the last commit",
+    "owner": {
+        "name": "Ed",
+        "email": "ed@edwarddonner.com"
+    },
+    "plugins": [
+        {
+            "name": "independent-reviewer",
+            "source": "./.claude/independent-reviewer",
+            "description": "Carry out an independent review of all changes since last commit",
+            "version": "1.0.0",
+            "author": {
+                "name": "Ed"
+            }
+        }
+    ]
+}

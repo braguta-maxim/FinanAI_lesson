@@ -66,7 +66,8 @@ CandleService (TTL cache + dedup + stale-if-error)
 
 ## Test Suite
 
-**217 tests, all passing.** 13 test modules in `backend/tests/market/`, plus recorded MOEX ISS
+**234 tests, all passing** (98% coverage). See `planning/MARKET_DATA_REVIEW.md` for the code review
+that closed the gap from 217 to 234 tests. 13 test modules in `backend/tests/market/`, plus recorded MOEX ISS
 JSON fixtures in `tests/market/fixtures/` (no real network calls in the unit suite).
 
 | Module | Focus |

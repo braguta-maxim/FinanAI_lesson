@@ -35,9 +35,11 @@ TICKER_PARAMS: dict[str, dict[str, float]] = {
 # Default parameters for tickers not in the list above (dynamically added).
 DEFAULT_PARAMS: dict[str, float] = {"sigma": 0.30, "mu": 0.08}
 
-# Sector -> intra-sector correlation. Rule: every intra-group correlation must be
-# >= CROSS_GROUP_CORR, otherwise the correlation matrix can stop being positive
-# semi-definite and the Cholesky decomposition raises.
+# Sector -> intra-sector correlation. The correlation matrix is built as a sum of non-negative-
+# scaled outer products (one per group, plus a base term for every pair) and a positive diagonal
+# correction, which is guaranteed positive semi-definite as long as every value here is < 1 --
+# see CODE_REVIEW.md §4.3 for the worked argument (an earlier version of this comment claimed the
+# stronger, unnecessary condition "every group value >= CROSS_GROUP_CORR").
 TICKER_GROUP: dict[str, str] = {
     "SBER": "banks",
     "SBERP": "banks",

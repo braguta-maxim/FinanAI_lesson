@@ -44,19 +44,36 @@ class MoexQuote:
     delay_seconds: int | None  # SYSTIME - TIME (~900 on the free tier)
 
 
+def _previous_business_day(d: date) -> date:
+    """The nearest weekday before `d` (Mon-Fri). Does not know about exchange holidays --
+    ISS gives us no way to recover those from TIME/SYSTIME alone (see the note below)."""
+    d -= timedelta(days=1)
+    while d.weekday() >= 5:  # Saturday=5, Sunday=6
+        d -= timedelta(days=1)
+    return d
+
+
 def _trade_time(md: dict) -> tuple[float | None, int | None]:
     """TIME ('HH:MM:SS') and SYSTIME ('YYYY-MM-DD HH:MM:SS') are the same timezone, so their
-    difference does not depend on which timezone that is."""
+    difference does not depend on which timezone that is.
+
+    TIME carries no date, so a trade "before" SYSTIME's clock time could be from any earlier
+    session. We assume it is from the most recent business day, which is correct across an
+    ordinary weekend and wrong by N days if an exchange holiday falls in between (ISS does not
+    expose enough information here to tell the difference; a real trading calendar would be
+    needed to fix that remaining gap).
+    """
     systime, tm = md.get("SYSTIME"), md.get("TIME")
     if not systime or not tm:
         return None, None
     try:
         sys_dt = datetime.strptime(systime, "%Y-%m-%d %H:%M:%S")
-        trade_dt = datetime.combine(sys_dt.date(), datetime.strptime(tm, "%H:%M:%S").time())
+        trade_time_of_day = datetime.strptime(tm, "%H:%M:%S").time()
+        trade_dt = datetime.combine(sys_dt.date(), trade_time_of_day)
     except ValueError:
         return None, None
-    if trade_dt > sys_dt:  # the trade was "yesterday"; SYSTIME is already past midnight
-        trade_dt -= timedelta(days=1)
+    if trade_dt > sys_dt:  # the trade is from an earlier session, not later today
+        trade_dt = datetime.combine(_previous_business_day(sys_dt.date()), trade_time_of_day)
     return trade_dt.replace(tzinfo=MSK).timestamp(), int((sys_dt - trade_dt).total_seconds())
 
 

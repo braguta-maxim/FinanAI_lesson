@@ -152,6 +152,27 @@ class TestAnalyze:
         result = analyze("SBER", make_candles([100.0 + i % 3 for i in range(20)]))
         assert result.beta_imoex is None
 
+    def test_beta_via_analyze_matches_independent_calculation(self):
+        """CODE_REVIEW §3.5: analyze()'s own benchmark/beta wiring had 0% coverage, so a column
+        swap in its align_closes({ticker: ..., BENCH: ...}) call would have gone unnoticed."""
+        rng = np.random.default_rng(7)
+        n = 40
+        bench_returns = rng.normal(0, 0.01, n)
+        # The asset is bench * 1.5 plus independent noise -- a known, non-trivial beta.
+        asset_returns = 1.5 * bench_returns + rng.normal(0, 0.002, n)
+
+        bench_closes = 100 * np.exp(np.cumsum(bench_returns))
+        asset_closes = 50 * np.exp(np.cumsum(asset_returns))
+
+        bench_candles = make_candles(list(bench_closes))
+        asset_candles = make_candles(list(asset_closes))
+
+        result = analyze("SBER", asset_candles, benchmark=bench_candles)
+
+        expected = beta(np.diff(np.log(asset_closes)), np.diff(np.log(bench_closes)))
+        assert result.beta_imoex == pytest.approx(expected)
+        assert result.beta_imoex == pytest.approx(1.5, abs=0.15)
+
 
 class TestPortfolioRisk:
     def test_risk_contributions_sum_to_one(self):

@@ -96,17 +96,37 @@ def create_market_router(
     @router.get("/correlations")
     async def correlations(tickers: str | None = None, days: int = Query(120, ge=30, le=730)) -> dict:
         raw = tickers.split(",") if tickers else source.get_tickers()
-        names = list(dict.fromkeys(ticker_or_400(x) for x in raw))[:MAX_CORR_TICKERS]
+        deduped = list(dict.fromkeys(ticker_or_400(x) for x in raw))
+        names, truncated = deduped[:MAX_CORR_TICKERS], deduped[MAX_CORR_TICKERS:]
         if len(names) < 2:
             raise HTTPException(400, "Provide at least 2 tickers")
-        series = await asyncio.gather(*(load(t, Interval.D1, days) for t in names))
-        used, closes = align_closes(dict(zip(names, series)))
+
+        async def fetch_or_skip(t: str) -> tuple[str, list[Candle] | None]:
+            # A ticker with no history (e.g. a recent listing) is skipped rather than failing
+            # the whole request; an upstream outage (503) still fails the request -- with MOEX
+            # down, a partial matrix would be misleading, not just incomplete.
+            try:
+                return t, await load(t, Interval.D1, days)
+            except HTTPException as e:
+                if e.status_code == 404:
+                    return t, None
+                raise
+
+        results = await asyncio.gather(*(fetch_or_skip(t) for t in names))
+        series = {t: c for t, c in results if c is not None}
+        skipped = [t for t, c in results if c is None]
+        if len(series) < 2:
+            raise HTTPException(404, "Not enough tickers with market data to compute correlations")
+
+        used, closes = align_closes(series)
         try:
             matrix = correlation_matrix(closes)
         except NoDataError as e:
             raise HTTPException(404, str(e)) from e
         return {
             "tickers": used,
+            "skipped": skipped,
+            "truncated": truncated,
             "observations": int(closes.shape[0]) - 1,
             "matrix": [[round(float(v), 4) for v in row] for row in matrix],
         }

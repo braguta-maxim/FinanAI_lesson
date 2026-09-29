@@ -62,6 +62,7 @@ class CandleService:
 
     async def benchmark(self, days: int) -> list[Candle]:
         """Daily IMOEX candles; [] on any problem (the benchmark is optional)."""
+        days = min(days, MAX_DAYS[Interval.D1])  # same clamp get() applies, for the same reason
         try:
             return await self._cached(
                 (BENCHMARK, Interval.D1, days),
@@ -89,8 +90,15 @@ class CandleService:
                 if hit:  # ISS is down — serve stale data
                     return hit[1]
                 raise
-            if not data and required:
-                raise NoDataError(f"No market data for {key[0]}")
+            if not data:
+                # A transient empty response for a ticker that had good data a moment ago is
+                # more likely an ISS hiccup than the ticker vanishing -- serve the stale entry
+                # instead of erroring, the same way an UpstreamError does above.
+                if hit:
+                    return hit[1]
+                if required:
+                    raise NoDataError(f"No market data for {key[0]}")
+                return data
             self._cache[key] = (time.monotonic() + TTL_SECONDS[interval], data)
             return data
 

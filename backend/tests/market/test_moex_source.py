@@ -3,6 +3,7 @@
 import asyncio
 
 import httpx
+import pytest
 
 from app.market.cache import PriceCache
 from app.market.iss import MoexClient
@@ -79,6 +80,30 @@ class TestMoexDataSource:
 
         await source.stop()
 
+    async def test_poll_loop_actually_fires_again_over_time(self):
+        """CODE_REVIEW §3.3: start()'s blocking poll is not the only poll -- the recurring
+        _poll_loop must keep calling the client on its own, without any further prompting."""
+        calls = {"n": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls["n"] += 1
+            return httpx.Response(200, json=board_response([("SBER", 273.0 + calls["n"])]))
+
+        client = client_for(handler)
+        cache = PriceCache()
+        source = MoexDataSource(cache, client=client, poll_interval=0.02)
+
+        await source.start(["SBER"])
+        calls_after_start = calls["n"]
+        assert calls_after_start == 1  # only the blocking first poll so far
+
+        await asyncio.sleep(0.15)  # several multiples of poll_interval
+
+        assert calls["n"] > calls_after_start
+        assert cache.get_price("SBER") == 273.0 + calls["n"]
+
+        await source.stop()
+
     async def test_source_survives_upstream_failure(self):
         client = client_for(lambda r: httpx.Response(500))
         cache = PriceCache()
@@ -146,6 +171,36 @@ class TestMoexDataSource:
         await source.add_ticker("SBER")  # already tracked -> no extra poll
         assert calls["n"] == calls_after_start
         assert source.get_tickers() == ["SBER"]
+
+        await source.stop()
+
+    async def test_stop_closes_a_self_owned_client(self):
+        """When no client is passed in (the production default), stop() must close the one it
+        created itself -- this is the actual default-usage path, previously untested."""
+        cache = PriceCache()
+        source = MoexDataSource(cache, poll_interval=100)  # no client= -> owns its own MoexClient
+        await source.start([])
+
+        await source.stop()
+
+        with pytest.raises(RuntimeError):
+            await source.client.get_quotes(["SBER"])  # closed clients refuse further requests
+
+    async def test_a_non_upstream_exception_during_poll_does_not_kill_the_task(self):
+        """The bare `except Exception` branch in _poll -- e.g. a bug in extract_quotes -- must
+        also just log and back off, not propagate and kill the poll loop."""
+
+        class BrokenClient:
+            async def get_quotes(self, tickers):
+                raise KeyError("boom")  # anything that isn't UpstreamError
+
+        cache = PriceCache()
+        source = MoexDataSource(cache, client=BrokenClient(), poll_interval=100)
+
+        await source.start(["SBER"])  # must not raise
+
+        assert source.status().healthy is False
+        assert "boom" in source.status().last_error
 
         await source.stop()
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections import deque
 from threading import Lock
 
 from .models import PriceUpdate
@@ -11,12 +12,14 @@ from .models import PriceUpdate
 class PriceCache:
     """Thread-safe in-memory cache of the latest price for each ticker.
 
-    Writers: SimulatorDataSource or MassiveDataSource (one at a time).
+    Writers: SimulatorDataSource or MoexDataSource (one at a time).
     Readers: SSE streaming endpoint, portfolio valuation, trade execution.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, history_size: int = 3600) -> None:
         self._prices: dict[str, PriceUpdate] = {}
+        self._history: dict[str, deque[tuple[float, float]]] = {}  # ticker -> (timestamp, price)
+        self._history_size = history_size
         self._lock = Lock()
         self._version: int = 0  # Monotonically increasing; bumped on every update
 
@@ -25,19 +28,23 @@ class PriceCache:
 
         Automatically computes direction and change from the previous price.
         If this is the first update for the ticker, previous_price == price (direction='flat').
+        Price is rounded to 4 decimal places: MOEX prices can have 4 decimals, and rounding to
+        cents would distort cheap stocks.
         """
         with self._lock:
             ts = timestamp if timestamp is not None else time.time()
             prev = self._prices.get(ticker)
+            price = round(price, 4)
             previous_price = prev.price if prev else price
 
             update = PriceUpdate(
                 ticker=ticker,
-                price=round(price, 2),
-                previous_price=round(previous_price, 2),
+                price=price,
+                previous_price=previous_price,
                 timestamp=ts,
             )
             self._prices[ticker] = update
+            self._history.setdefault(ticker, deque(maxlen=self._history_size)).append((ts, price))
             self._version += 1
             return update
 
@@ -56,9 +63,15 @@ class PriceCache:
         update = self.get(ticker)
         return update.price if update else None
 
+    def get_history(self, ticker: str) -> list[tuple[float, float]]:
+        """[(timestamp, price), ...] oldest first, since this cache was created. Empty if unknown."""
+        with self._lock:
+            return list(self._history.get(ticker, ()))
+
     def remove(self, ticker: str) -> None:
         """Remove a ticker from the cache (e.g., when removed from watchlist)."""
         with self._lock:
+            self._history.pop(ticker, None)
             if self._prices.pop(ticker, None) is not None:
                 self._version += 1
 

@@ -27,7 +27,7 @@ from app.market.simulator import SimulatorDataSource
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
 
 # Ordered ticker list matching the default watchlist
-TICKERS = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "JPM", "V", "NFLX"]
+TICKERS = ["SBER", "GAZP", "LKOH", "GMKN", "ROSN", "NVTK", "MTSS", "TATN", "PLZL", "VTBR"]
 
 DURATION = 60  # seconds
 
@@ -89,7 +89,7 @@ def build_table(
             color = "bright_black"
             arrow = "[bright_black]\u2500[/]"
 
-        price_str = f"[{color}]${format_price(update.price)}[/]"
+        price_str = f"[{color}]₽{format_price(update.price)}[/]"
         change_str = f"[{color}]{update.change:+.2f}[/]"
         pct_str = f"[{color}]{update.change_percent:+.2f}%[/]"
 
@@ -195,8 +195,8 @@ def print_summary(cache: PriceCache) -> None:
 
         table.add_row(
             ticker,
-            f"${format_price(seed)}",
-            f"[{color}]${format_price(final)}[/]",
+            f"₽{format_price(seed)}",
+            f"[{color}]₽{format_price(final)}[/]",
             f"[{color}]{session_change:+.2f}%[/]",
         )
 
@@ -255,7 +255,7 @@ async def run() -> None:
                             f"[bright_black]{timestamp}[/]  "
                             f"[bold {color}]{direction} {ticker}[/]  "
                             f"[{color}]{update.change_percent:+.2f}%[/]  "
-                            f"${format_price(update.price)}"
+                            f"₽{format_price(update.price)}"
                         )
 
                 live.update(build_dashboard(cache, history, events, start_time))

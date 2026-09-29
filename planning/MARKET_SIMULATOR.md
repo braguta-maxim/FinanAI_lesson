@@ -1,5 +1,14 @@
 # Market Simulator Design
 
+> **Partially superseded by the MOEX pivot.** The default tickers, seed prices, and correlation
+> groups described below are the old US/Massive set (AAPL, GOOGL, ...). The simulator now seeds
+> from MOEX tickers (SBER, GAZP, ...) with sector groups `banks`/`oil_gas`/`metals`
+> (`app/market/seed_prices.py`), and `dt` is derived from `update_interval * time_scale` instead of
+> being a fixed constant (`GBMSimulator.DEFAULT_DT` no longer exists). The GBM math itself (§2), the
+> Cholesky-correlation mechanism (§3), and random events (§4) are unchanged. See
+> `planning/MARKET_DATA_DESIGN.md` §8 for the current design and `planning/MARKET_DATA_SUMMARY.md`
+> for a current-state summary.
+
 Design and code structure of the GBM-based price simulator, the default market data source (used whenever
 `MASSIVE_API_KEY` is unset — the common case per PLAN.md §5). Describes what is implemented in
 `backend/app/market/simulator.py`, verified against the source. See `MARKET_INTERFACE.md` for how this plugs

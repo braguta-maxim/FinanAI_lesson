@@ -64,16 +64,16 @@ async def test_starts_with_retry_directive():
 async def test_payload_is_dict_keyed_by_ticker():
     """One data event carries all tickers, each with the seven documented fields."""
     cache = PriceCache()
-    cache.update("AAPL", 190.50)
-    cache.update("GOOGL", 175.25)
+    cache.update("SBER", 273.50)
+    cache.update("GAZP", 97.25)
 
     events = await _collect(cache, StubRequest(disconnect_on_call=2))
 
     assert len(events) == 2
     data = _payload(events[1])
-    assert set(data) == {"AAPL", "GOOGL"}
-    assert set(data["AAPL"]) == EVENT_FIELDS
-    assert data["AAPL"]["price"] == 190.50
+    assert set(data) == {"SBER", "GAZP"}
+    assert set(data["SBER"]) == EVENT_FIELDS
+    assert data["SBER"]["price"] == 273.50
 
 
 async def test_empty_cache_sends_no_data_event():
@@ -86,7 +86,7 @@ async def test_empty_cache_sends_no_data_event():
 async def test_no_duplicate_event_when_nothing_changed():
     """Two loop iterations over an unchanged cache produce a single data event."""
     cache = PriceCache()
-    cache.update("AAPL", 190.50)
+    cache.update("SBER", 273.50)
 
     events = await _collect(cache, StubRequest(disconnect_on_call=3))
 
@@ -96,22 +96,22 @@ async def test_no_duplicate_event_when_nothing_changed():
 async def test_new_event_after_price_change():
     """A price update between iterations produces another data event."""
     cache = PriceCache()
-    cache.update("AAPL", 190.50)
+    cache.update("SBER", 273.50)
 
     def update_on_second_call(call: int) -> None:
         if call == 2:
-            cache.update("AAPL", 191.00)
+            cache.update("SBER", 274.00)
 
     events = await _collect(cache, StubRequest(disconnect_on_call=3, on_call=update_on_second_call))
 
     assert len(events) == 3
-    assert _payload(events[2])["AAPL"]["price"] == 191.00
+    assert _payload(events[2])["SBER"]["price"] == 274.00
 
 
 async def test_cancellation_propagates():
     """Cancelling a consumer of the stream must not be swallowed by the generator."""
     cache = PriceCache()
-    cache.update("AAPL", 190.50)
+    cache.update("SBER", 273.50)
 
     async def consume() -> None:
         async for _ in _generate_events(cache, StubRequest(disconnect_on_call=10**9), interval=0.01):

@@ -1,7 +1,7 @@
 """Tests for GBMSimulator."""
 
 from app.market.seed_prices import SEED_PRICES
-from app.market.simulator import GBMSimulator
+from app.market.simulator import TRADING_SECONDS_PER_YEAR, GBMSimulator
 
 
 class TestGBMSimulator:
@@ -9,55 +9,55 @@ class TestGBMSimulator:
 
     def test_step_returns_all_tickers(self):
         """Test that step() returns prices for all tickers."""
-        sim = GBMSimulator(tickers=["AAPL", "GOOGL"])
+        sim = GBMSimulator(tickers=["SBER", "GAZP"])
         result = sim.step()
-        assert set(result.keys()) == {"AAPL", "GOOGL"}
+        assert set(result.keys()) == {"SBER", "GAZP"}
 
     def test_prices_are_positive(self):
         """GBM prices can never go negative (exp() is always positive)."""
-        sim = GBMSimulator(tickers=["AAPL"])
+        sim = GBMSimulator(tickers=["SBER"])
         for _ in range(10_000):
             prices = sim.step()
-            assert prices["AAPL"] > 0
+            assert prices["SBER"] > 0
 
     def test_initial_prices_match_seeds(self):
         """Test that initial prices match seed prices."""
-        sim = GBMSimulator(tickers=["AAPL"])
+        sim = GBMSimulator(tickers=["SBER"])
         # Before any step, price should be the seed price
-        assert sim.get_price("AAPL") == SEED_PRICES["AAPL"]
+        assert sim.get_price("SBER") == SEED_PRICES["SBER"]
 
     def test_add_ticker(self):
         """Test adding a ticker dynamically."""
-        sim = GBMSimulator(tickers=["AAPL"])
-        sim.add_ticker("TSLA")
+        sim = GBMSimulator(tickers=["SBER"])
+        sim.add_ticker("LKOH")
         result = sim.step()
-        assert "TSLA" in result
+        assert "LKOH" in result
 
     def test_remove_ticker(self):
         """Test removing a ticker."""
-        sim = GBMSimulator(tickers=["AAPL", "GOOGL"])
-        sim.remove_ticker("GOOGL")
+        sim = GBMSimulator(tickers=["SBER", "GAZP"])
+        sim.remove_ticker("GAZP")
         result = sim.step()
-        assert "GOOGL" not in result
-        assert "AAPL" in result
+        assert "GAZP" not in result
+        assert "SBER" in result
 
     def test_add_duplicate_is_noop(self):
         """Test that adding a duplicate ticker is a no-op."""
-        sim = GBMSimulator(tickers=["AAPL"])
-        sim.add_ticker("AAPL")
+        sim = GBMSimulator(tickers=["SBER"])
+        sim.add_ticker("SBER")
         assert len(sim._tickers) == 1
 
     def test_remove_nonexistent_is_noop(self):
         """Test that removing a non-existent ticker is a no-op."""
-        sim = GBMSimulator(tickers=["AAPL"])
+        sim = GBMSimulator(tickers=["SBER"])
         sim.remove_ticker("NOPE")  # Should not raise
 
     def test_unknown_ticker_gets_random_seed_price(self):
-        """Test that unknown tickers get random seed prices."""
+        """Test that unknown tickers get a random price in UNKNOWN_PRICE_RANGE."""
         sim = GBMSimulator(tickers=["ZZZZ"])
         price = sim.get_price("ZZZZ")
         assert price is not None
-        assert 50.0 <= price <= 300.0
+        assert 50.0 <= price <= 2000.0
 
     def test_empty_step(self):
         """Test stepping with no tickers."""
@@ -67,81 +67,95 @@ class TestGBMSimulator:
 
     def test_prices_change_over_time(self):
         """After many steps, prices should have drifted from their seeds."""
-        sim = GBMSimulator(tickers=["AAPL"])
-        initial_price = sim.get_price("AAPL")
+        sim = GBMSimulator(tickers=["SBER"])
+        initial_price = sim.get_price("SBER")
 
         for _ in range(1000):
             sim.step()
 
-        final_price = sim.get_price("AAPL")
+        final_price = sim.get_price("SBER")
         # Price should have changed (extremely unlikely to be exactly the seed)
         assert final_price != initial_price
 
     def test_random_event_moves_price_2_to_5_percent(self):
         """With event_probability=1.0 every tick is a 2-5% shock on top of the tiny GBM move."""
-        sim = GBMSimulator(tickers=["AAPL"], event_probability=1.0)
+        sim = GBMSimulator(tickers=["SBER"], event_probability=1.0)
         for _ in range(50):
-            before = sim.get_price("AAPL")
-            after = sim.step()["AAPL"]
+            before = sim.get_price("SBER")
+            after = sim.step()["SBER"]
             assert 0.019 <= abs(after / before - 1) <= 0.051
 
     def test_no_events_when_probability_zero(self):
         """With event_probability=0 a single tick stays within GBM noise (well under 1%)."""
-        sim = GBMSimulator(tickers=["AAPL"], event_probability=0.0)
+        sim = GBMSimulator(tickers=["SBER"], event_probability=0.0)
         for _ in range(50):
-            before = sim.get_price("AAPL")
-            after = sim.step()["AAPL"]
+            before = sim.get_price("SBER")
+            after = sim.step()["SBER"]
             assert abs(after / before - 1) < 0.01
 
     def test_cholesky_rebuilds_on_add(self):
         """Test that Cholesky matrix is rebuilt when tickers are added."""
-        sim = GBMSimulator(tickers=["AAPL"])
+        sim = GBMSimulator(tickers=["SBER"])
         assert sim._cholesky is None  # Only 1 ticker, no correlation matrix
-        sim.add_ticker("GOOGL")
+        sim.add_ticker("GAZP")
         assert sim._cholesky is not None  # Now 2 tickers, matrix exists
 
     def test_cholesky_none_with_one_ticker(self):
         """Test that Cholesky is None with only one ticker."""
-        sim = GBMSimulator(tickers=["AAPL"])
+        sim = GBMSimulator(tickers=["SBER"])
         assert sim._cholesky is None
 
     def test_get_price_returns_none_for_unknown(self):
         """Test that get_price returns None for unknown ticker."""
-        sim = GBMSimulator(tickers=["AAPL"])
+        sim = GBMSimulator(tickers=["SBER"])
         assert sim.get_price("UNKNOWN") is None
 
-    def test_pairwise_correlation_tech_stocks(self):
-        """Test that tech stocks have high correlation."""
-        corr = GBMSimulator._pairwise_correlation("AAPL", "GOOGL")
-        assert corr == 0.6
+    def test_pairwise_correlation_banks(self):
+        """Test that two bank stocks have high correlation."""
+        assert GBMSimulator._pairwise_correlation("SBER", "VTBR") == 0.6
 
-    def test_pairwise_correlation_finance_stocks(self):
-        """Test that finance stocks have moderate correlation."""
-        corr = GBMSimulator._pairwise_correlation("JPM", "V")
-        assert corr == 0.5
+    def test_pairwise_correlation_oil_gas(self):
+        """Test that two oil & gas stocks have high correlation."""
+        assert GBMSimulator._pairwise_correlation("GAZP", "LKOH") == 0.6
 
-    def test_pairwise_correlation_tsla(self):
-        """Test that TSLA has lower correlation with everything."""
-        corr = GBMSimulator._pairwise_correlation("TSLA", "AAPL")
-        assert corr == 0.3
-        corr = GBMSimulator._pairwise_correlation("TSLA", "JPM")
-        assert corr == 0.3
+    def test_pairwise_correlation_metals(self):
+        """Test that two metals/mining stocks have moderate correlation."""
+        assert GBMSimulator._pairwise_correlation("GMKN", "PLZL") == 0.5
+
+    def test_pairwise_correlation_telecom_has_no_group(self):
+        """Test that MTSS (telecom, no sector group) falls back to cross-group correlation."""
+        assert GBMSimulator._pairwise_correlation("MTSS", "SBER") == 0.3
+        assert GBMSimulator._pairwise_correlation("MTSS", "GAZP") == 0.3
 
     def test_pairwise_correlation_cross_sector(self):
-        """Test cross-sector correlation."""
-        corr = GBMSimulator._pairwise_correlation("AAPL", "JPM")
-        assert corr == 0.3
+        """Test cross-sector correlation (bank vs. oil & gas)."""
+        assert GBMSimulator._pairwise_correlation("SBER", "GAZP") == 0.3
+
+    def test_pairwise_correlation_unknown_ticker(self):
+        """Test that an unknown ticker (no group) falls back to cross-group correlation."""
+        assert GBMSimulator._pairwise_correlation("ZZZZ", "SBER") == 0.3
+
+    def test_dt_derived_from_update_interval(self):
+        """dt is update_interval * time_scale / TRADING_SECONDS_PER_YEAR -- one knob, not two."""
+        sim = GBMSimulator(tickers=["SBER"], update_interval=0.5, time_scale=1.0)
+        assert sim._dt == 0.5 / TRADING_SECONDS_PER_YEAR
+
+    def test_dt_scales_with_time_scale(self):
+        """A higher time_scale speeds up the simulated market proportionally."""
+        sim = GBMSimulator(tickers=["SBER"], update_interval=0.5, time_scale=10.0)
+        assert sim._dt == 5.0 / TRADING_SECONDS_PER_YEAR
 
     def test_default_dt_is_reasonable(self):
-        """Test that default dt is a reasonable small value."""
-        assert 0 < GBMSimulator.DEFAULT_DT < 0.0001
+        """Test that the default dt is a reasonable small value."""
+        sim = GBMSimulator(tickers=["SBER"])
+        assert 0 < sim._dt < 0.0001
 
     def test_prices_rounded_to_two_decimals(self):
         """Test that prices are rounded to 2 decimal places."""
-        sim = GBMSimulator(tickers=["AAPL"])
+        sim = GBMSimulator(tickers=["SBER"])
         result = sim.step()
-        price_str = str(result["AAPL"])
+        price_str = str(result["SBER"])
         # Check that we have at most 2 decimal places
-        if '.' in price_str:
-            decimal_part = price_str.split('.')[1]
+        if "." in price_str:
+            decimal_part = price_str.split(".")[1]
             assert len(decimal_part) <= 2

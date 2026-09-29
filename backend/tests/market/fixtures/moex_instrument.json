@@ -1,0 +1,8 @@
+{
+  "securities": {
+    "columns": ["SECID", "SHORTNAME", "PREVPRICE", "LOTSIZE", "DECIMALS", "MINSTEP"],
+    "data": [
+      ["SBER", "Сбербанк", 272.45, 10, 2, 0.01]
+    ]
+  }
+}

@@ -1,5 +1,10 @@
 # Massive API Research
 
+> **Historical.** FinAlly moved to the Russian market (MOEX) after this research; the Massive
+> client (`massive_client.py`) was removed from the codebase and the `massive` dependency dropped.
+> See `planning/MOEX_API.md` for the API that replaced it and `planning/MARKET_DATA_DESIGN.md` for
+> the current design. Kept for reference — the free-tier finding in §1 is why MOEX was preferred.
+
 Research notes on the [Massive](https://massive.com) API (formerly Polygon.io, renamed October 2025) for
 retrieving stock prices, to inform the unified market data interface in `MARKET_INTERFACE.md`. Verified against
 the installed `massive` Python client (v2.2.0, `backend/.venv/lib/.../site-packages/massive/`) and the vendor's

@@ -1,5 +1,13 @@
 # Unified Market Data Interface
 
+> **Superseded by the MOEX pivot.** This document describes the interface as it existed with
+> Massive/US tickers. The project has since moved to MOEX (Russian market); `massive_client.py` was
+> removed and replaced by `moex_client.py` + `iss.py`, per `planning/MARKET_DATA_DESIGN.md` (the
+> current, authoritative design) and `planning/MARKET_DATA_SUMMARY.md` (a current-state summary).
+> The core interface shape described below (`MarketDataSource` ABC, `PriceCache`, the SSE contract)
+> is unchanged; the source-specific sections (§6, §7) describe the retired Massive client, not
+> `MoexDataSource`.
+
 Design for the Python interface that both market data sources (Massive API, GBM simulator) implement. This
 describes what is already built in `backend/app/market/` (verified against the source; see the file
 references throughout) and the rationale connecting it to `MASSIVE_API.md`'s findings and PLAN.md §6. It is

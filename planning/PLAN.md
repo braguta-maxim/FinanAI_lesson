@@ -318,6 +318,26 @@ All tables except `users_profile` include a `user_id` column defaulting to `"def
 |--------|------|-------------|
 | GET | `/api/health` | Health check (for Docker/deployment) |
 
+### Market Data (additional, read-only)
+
+Beyond the SSE stream, the market data subsystem exposes read-only endpoints for the main chart,
+portfolio analytics, and the LLM's market context. None of these add a ticker to the watchlist —
+they work for any valid ticker, tracked or not. Full design: `planning/MARKET_DATA_DESIGN.md` §12.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/market/status` | Source name, health, delay, tracked tickers, whether the main session is open |
+| GET | `/api/market/quotes` | Latest prices for all tracked tickers (same shape as SSE, fetched once) |
+| GET | `/api/market/quotes/{ticker}` | Price plus session-since-startup stats (first/last/high/low, change) |
+| GET | `/api/market/instruments/{ticker}` | Name, lot size, price precision, yesterday's close |
+| GET | `/api/market/history/{ticker}?interval=1d&days=90` | OHLCV candles for the main chart |
+| GET | `/api/market/analytics/{ticker}?days=180` | SMA/EMA/RSI/Bollinger, annualized volatility, max drawdown, beta vs. IMOEX, trend |
+| GET | `/api/market/correlations?tickers=SBER,GAZP&days=120` | Correlation matrix of daily log returns |
+
+Codes: `400` invalid ticker/parameters, `404` no data for that ticker, `503` MOEX ISS is down and
+nothing cached to fall back on, `422` malformed query parameter (standard FastAPI). Error bodies
+are `{"detail": "..."}`, matching the rest of the API. Monetary fields are plain numbers, in rubles.
+
 ### Response Shapes
 
 Errors use FastAPI's default shape `{"detail": "<human-readable message>"}`: 400 for business-rule violations, 404 for unknown resources, 422 for malformed request bodies (missing fields or wrong JSON types).

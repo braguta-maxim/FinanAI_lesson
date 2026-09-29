@@ -6,23 +6,27 @@ import asyncio
 import logging
 import math
 import random
+import time
 
 import numpy as np
 
 from .cache import PriceCache
 from .interface import MarketDataSource
+from .models import SourceStatus
 from .seed_prices import (
-    CORRELATION_GROUPS,
     CROSS_GROUP_CORR,
     DEFAULT_PARAMS,
-    INTRA_FINANCE_CORR,
-    INTRA_TECH_CORR,
+    GROUP_CORR,
     SEED_PRICES,
+    TICKER_GROUP,
     TICKER_PARAMS,
-    TSLA_CORR,
+    UNKNOWN_PRICE_RANGE,
 )
 
 logger = logging.getLogger(__name__)
+
+# MOEX's main equities session runs roughly 09:50-18:50 (9 hours), ~250 trading days/year.
+TRADING_SECONDS_PER_YEAR = 250 * 9 * 3600  # 8,100,000
 
 
 class GBMSimulator:
@@ -35,25 +39,23 @@ class GBMSimulator:
         S(t)   = current price
         mu     = annualized drift (expected return)
         sigma  = annualized volatility
-        dt     = time step as fraction of a trading year
+        dt     = time step as a fraction of a trading year
         Z      = correlated standard normal random variable
 
-    The tiny dt (~8.5e-8 for 500ms ticks over 252 trading days * 6.5h/day)
-    produces sub-cent moves per tick that accumulate naturally over time.
+    `dt` is derived from `update_interval` (and `time_scale`) rather than hardcoded, so there is
+    one knob for "how fast the market moves" instead of two values that can drift out of sync.
     """
-
-    # 500ms expressed as a fraction of a trading year
-    # 252 trading days * 6.5 hours/day * 3600 seconds/hour = 5,896,800 seconds
-    TRADING_SECONDS_PER_YEAR = 252 * 6.5 * 3600  # 5,896,800
-    DEFAULT_DT = 0.5 / TRADING_SECONDS_PER_YEAR  # ~8.48e-8
 
     def __init__(
         self,
         tickers: list[str],
-        dt: float = DEFAULT_DT,
+        update_interval: float = 0.5,
+        time_scale: float = 1.0,
         event_probability: float = 0.001,
     ) -> None:
-        self._dt = dt
+        # time_scale > 1 speeds up the market for a demo (a real 500ms tick alone produces
+        # sub-cent moves that are too subtle to see).
+        self._dt = update_interval * time_scale / TRADING_SECONDS_PER_YEAR
         self._event_prob = event_probability
 
         # Per-ticker state
@@ -148,7 +150,7 @@ class GBMSimulator:
         if ticker in self._prices:
             return
         self._tickers.append(ticker)
-        self._prices[ticker] = SEED_PRICES.get(ticker, random.uniform(50.0, 300.0))
+        self._prices[ticker] = SEED_PRICES.get(ticker) or random.uniform(*UNKNOWN_PRICE_RANGE)
         self._params[ticker] = TICKER_PARAMS.get(ticker, dict(DEFAULT_PARAMS))
 
     def _rebuild_cholesky(self) -> None:
@@ -175,25 +177,12 @@ class GBMSimulator:
     def _pairwise_correlation(t1: str, t2: str) -> float:
         """Determine correlation between two tickers based on sector grouping.
 
-        Correlation structure:
-          - Same tech sector:   0.6
-          - Same finance sector: 0.5
-          - TSLA with anything: 0.3 (it does its own thing)
-          - Cross-sector:       0.3
-          - Unknown tickers:    0.3
+        Same sector (banks, oil & gas, metals) -> the sector's GROUP_CORR. Anything else
+        (cross-sector, telecom, or an unknown ticker) -> CROSS_GROUP_CORR.
         """
-        tech = CORRELATION_GROUPS["tech"]
-        finance = CORRELATION_GROUPS["finance"]
-
-        # TSLA is in tech set but behaves independently
-        if t1 == "TSLA" or t2 == "TSLA":
-            return TSLA_CORR
-
-        if t1 in tech and t2 in tech:
-            return INTRA_TECH_CORR
-        if t1 in finance and t2 in finance:
-            return INTRA_FINANCE_CORR
-
+        g1, g2 = TICKER_GROUP.get(t1), TICKER_GROUP.get(t2)
+        if g1 is not None and g1 == g2:
+            return GROUP_CORR[g1]
         return CROSS_GROUP_CORR
 
 
@@ -208,10 +197,12 @@ class SimulatorDataSource(MarketDataSource):
         self,
         price_cache: PriceCache,
         update_interval: float = 0.5,
+        time_scale: float = 1.0,
         event_probability: float = 0.001,
     ) -> None:
         self._cache = price_cache
         self._interval = update_interval
+        self._time_scale = time_scale
         self._event_prob = event_probability
         self._sim: GBMSimulator | None = None
         self._task: asyncio.Task | None = None
@@ -219,6 +210,8 @@ class SimulatorDataSource(MarketDataSource):
     async def start(self, tickers: list[str]) -> None:
         self._sim = GBMSimulator(
             tickers=tickers,
+            update_interval=self._interval,
+            time_scale=self._time_scale,
             event_probability=self._event_prob,
         )
         # Seed the cache with initial prices so SSE has data immediately
@@ -256,6 +249,9 @@ class SimulatorDataSource(MarketDataSource):
 
     def get_tickers(self) -> list[str]:
         return self._sim.get_tickers() if self._sim else []
+
+    def status(self) -> SourceStatus:
+        return SourceStatus(source="simulator", healthy=True, delay_seconds=0, last_success=time.time())
 
     async def _run_loop(self) -> None:
         """Core loop: step the simulation, write to cache, sleep."""

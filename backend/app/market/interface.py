@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from .models import SourceStatus
+
 
 class MarketDataSource(ABC):
     """Contract for market data providers.
@@ -14,10 +16,10 @@ class MarketDataSource(ABC):
 
     Lifecycle:
         source = create_market_data_source(cache)
-        await source.start(["AAPL", "GOOGL", ...])
+        await source.start(["SBER", "GAZP", ...])
         # ... app runs ...
-        await source.add_ticker("TSLA")
-        await source.remove_ticker("GOOGL")
+        await source.add_ticker("LKOH")
+        await source.remove_ticker("GAZP")
         # ... app shutting down ...
         await source.stop()
     """
@@ -55,3 +57,11 @@ class MarketDataSource(ABC):
     @abstractmethod
     def get_tickers(self) -> list[str]:
         """Return the current list of actively tracked tickers."""
+
+    def status(self) -> SourceStatus:
+        """Current health of the source, for `/api/market/status`.
+
+        Not abstract, so existing implementations that predate this method still satisfy the
+        interface. The default is "healthy, no delay".
+        """
+        return SourceStatus(source=type(self).__name__, healthy=True, delay_seconds=0)

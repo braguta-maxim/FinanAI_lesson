@@ -1,0 +1,16 @@
+{
+  "marketdata": {
+    "columns": ["SECID", "LAST", "TIME", "SYSTIME"],
+    "data": [
+      ["SBER", 273.28, "08:25:11", "2026-09-29 08:40:11"],
+      ["ZZZZ", null, null, null]
+    ]
+  },
+  "securities": {
+    "columns": ["SECID", "SHORTNAME", "PREVPRICE"],
+    "data": [
+      ["SBER", "Сбербанк", 272.9],
+      ["ZZZZ", "Тест", 100.5]
+    ]
+  }
+}

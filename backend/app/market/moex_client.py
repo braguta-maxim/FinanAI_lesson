@@ -44,7 +44,7 @@ class MoexDataSource(MarketDataSource):
         return self._client
 
     async def start(self, tickers: list[str]) -> None:
-        self._tickers = list(dict.fromkeys(tickers))
+        self._tickers = list(dict.fromkeys(t.strip().upper() for t in tickers))
         await self._poll(self._tickers)  # blocking first poll: prices exist before the startup snapshot
         self._task = asyncio.create_task(self._poll_loop(), name="moex-poller")
         logger.info("MOEX poller started: %d tickers, %.0fs interval", len(self._tickers), self._interval)
@@ -61,12 +61,17 @@ class MoexDataSource(MarketDataSource):
             await self._client.aclose()
 
     async def add_ticker(self, ticker: str) -> None:
+        # Defensive normalization (CODE_REVIEW §3.1): PLAN §8 normalizes upstream of this call,
+        # but MOEX always echoes the canonical uppercase SECID, so an un-normalized ticker here
+        # would silently never match in _poll's tracking check and never get a price.
+        ticker = ticker.strip().upper()
         if ticker in self._tickers:
             return
         self._tickers.append(ticker)
         await self._poll([ticker])  # don't wait for the next cycle (up to 15s)
 
     async def remove_ticker(self, ticker: str) -> None:
+        ticker = ticker.strip().upper()
         if ticker in self._tickers:
             self._tickers.remove(ticker)
         self._cache.remove(ticker)

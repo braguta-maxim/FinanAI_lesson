@@ -1,7 +1,11 @@
 """Tests for GBMSimulator."""
 
+import pytest
+
 from app.market.seed_prices import SEED_PRICES
 from app.market.simulator import TRADING_SECONDS_PER_YEAR, GBMSimulator
+
+DEFAULT_WATCHLIST = ["SBER", "GAZP", "LKOH", "GMKN", "ROSN", "NVTK", "MTSS", "TATN", "PLZL", "VTBR"]
 
 
 class TestGBMSimulator:
@@ -149,6 +153,28 @@ class TestGBMSimulator:
         """Test that the default dt is a reasonable small value."""
         sim = GBMSimulator(tickers=["SBER"])
         assert 0 < sim._dt < 0.0001
+
+    def test_cholesky_succeeds_for_the_full_default_watchlist(self):
+        """CODE_REVIEW §4.2: this exact scenario (10 tickers, 3 sector groups) was flagged as an
+        untested gap in the pre-MOEX review too -- pin it down so a future edit to the tickers,
+        groups, or correlation values can't silently break the PSD property Cholesky relies on."""
+        sim = GBMSimulator(tickers=DEFAULT_WATCHLIST)
+        assert sim._cholesky is not None
+        assert sim._cholesky.shape == (10, 10)
+        for _ in range(200):
+            prices = sim.step()
+            assert all(p > 0 for p in prices.values())
+
+    def test_invalid_correlation_matrix_raises_a_clear_error(self, monkeypatch):
+        """CODE_REVIEW §4.3: a bad GROUP_CORR value should fail loudly, not with a bare LinAlgError."""
+        import app.market.seed_prices as seed_prices
+
+        # GROUP_CORR is a mutable dict shared by reference with simulator.py's `from ... import`,
+        # so mutating it here is visible there too -- no need to patch two names.
+        monkeypatch.setitem(seed_prices.GROUP_CORR, "banks", 1.5)  # not a valid correlation; breaks PSD
+
+        with pytest.raises(ValueError, match="not positive semi-definite"):
+            GBMSimulator(tickers=["SBER", "VTBR"])  # both in the "banks" group
 
     def test_prices_rounded_to_two_decimals(self):
         """Test that prices are rounded to 2 decimal places."""

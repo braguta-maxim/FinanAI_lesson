@@ -200,6 +200,56 @@ class TestCorrelations:
         assert resp.status_code == 200
         assert resp.json()["tickers"] == ["SBER", "GAZP"]
 
+    def test_ticker_with_no_data_is_skipped_not_fatal(self):
+        """CODE_REVIEW §3.10: one bad ticker among several degrades gracefully."""
+
+        class PartialCandleService(FakeCandleService):
+            async def get(self, ticker, interval, days):
+                if ticker == "GAZP":
+                    raise NoDataError("no data for GAZP")
+                return await super().get(ticker, interval, days)
+
+        app, _, _ = build_app(candle_service=PartialCandleService())
+        with TestClient(app) as c:
+            resp = c.get("/api/market/correlations?tickers=SBER,GAZP,LKOH")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["tickers"] == ["SBER", "LKOH"]
+        assert body["skipped"] == ["GAZP"]
+
+    def test_upstream_outage_still_fails_the_whole_request(self):
+        """Unlike a per-ticker data gap, a systemic MOEX outage should not silently degrade."""
+
+        class DownCandleService(FakeCandleService):
+            async def get(self, ticker, interval, days):
+                raise UpstreamError("MOEX is down")
+
+        app, _, _ = build_app(candle_service=DownCandleService())
+        with TestClient(app) as c:
+            resp = c.get("/api/market/correlations?tickers=SBER,GAZP")
+        assert resp.status_code == 503
+
+    def test_too_few_tickers_after_skipping_is_404(self):
+        class MostlyEmptyCandleService(FakeCandleService):
+            async def get(self, ticker, interval, days):
+                if ticker != "SBER":
+                    raise NoDataError("no data")
+                return await super().get(ticker, interval, days)
+
+        app, _, _ = build_app(candle_service=MostlyEmptyCandleService())
+        with TestClient(app) as c:
+            resp = c.get("/api/market/correlations?tickers=SBER,GAZP,LKOH")
+        assert resp.status_code == 404
+
+    def test_truncation_past_max_tickers_is_visible_in_the_response(self, client):
+        names = [f"AA{chr(ord('A') + i)}" for i in range(20)]  # 20 distinct, all-letter tickers
+        resp = client.get(f"/api/market/correlations?tickers={','.join(names)}")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["tickers"]) == 15
+        assert len(body["truncated"]) == 5
+        assert body["truncated"] == names[15:]
+
 
 class TestReadOnlyGuarantee:
     """None of these endpoints may add a ticker to what the source tracks."""

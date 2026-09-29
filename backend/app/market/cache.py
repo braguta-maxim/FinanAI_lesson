@@ -16,7 +16,7 @@ class PriceCache:
     Readers: SSE streaming endpoint, portfolio valuation, trade execution.
     """
 
-    def __init__(self, history_size: int = 3600) -> None:
+    def __init__(self, history_size: int = 43_200) -> None:
         self._prices: dict[str, PriceUpdate] = {}
         self._history: dict[str, deque[tuple[float, float]]] = {}  # ticker -> (timestamp, price)
         self._history_size = history_size
@@ -64,7 +64,16 @@ class PriceCache:
         return update.price if update else None
 
     def get_history(self, ticker: str) -> list[tuple[float, float]]:
-        """[(timestamp, price), ...] oldest first, since this cache was created. Empty if unknown."""
+        """[(timestamp, price), ...] oldest first, since this cache was created. Empty if unknown.
+
+        This is a *tick count* window, not a time window (CODE_REVIEW §3.8): once `history_size`
+        ticks have been recorded, the oldest ones are evicted regardless of how much wall-clock
+        time they span. The default (43,200) covers about 6 hours at the simulator's default
+        500ms tick interval, or about 180 hours (a week of MOEX sessions) at MOEX's 15s poll
+        interval. A source ticking faster than 500ms, or a demo session left running past that
+        window, will see "since start" in `sessions.py` quietly mean "since the window began,"
+        not literally since the cache was created.
+        """
         with self._lock:
             return list(self._history.get(ticker, ()))
 

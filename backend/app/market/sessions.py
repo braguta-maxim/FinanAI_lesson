@@ -18,7 +18,11 @@ def is_main_session(now: datetime | None = None) -> bool:
 
 
 def session_stats(history: list[tuple[float, float]]) -> dict | None:
-    """Stats over ticks since the server started: first/last/high/low price and the change."""
+    """Stats over the ticks in `history`: first/last/high/low price and the change.
+
+    "Since the server started" is only exact while the cache's tick-history window
+    (`PriceCache.get_history`'s docstring) hasn't rolled over yet.
+    """
     if not history:
         return None
     prices = [p for _, p in history]

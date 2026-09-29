@@ -171,7 +171,14 @@ class GBMSimulator:
                 corr[i, j] = rho
                 corr[j, i] = rho
 
-        self._cholesky = np.linalg.cholesky(corr)
+        try:
+            self._cholesky = np.linalg.cholesky(corr)
+        except np.linalg.LinAlgError as e:
+            raise ValueError(
+                "Correlation matrix is not positive semi-definite -- check GROUP_CORR and "
+                "CROSS_GROUP_CORR in seed_prices.py (every value must be < 1; see the sum-of-"
+                "outer-products argument in that file's comment)"
+            ) from e
 
     @staticmethod
     def _pairwise_correlation(t1: str, t2: str) -> float:

@@ -108,6 +108,21 @@ class TestExtractQuotes:
         expected = datetime(2026, 9, 29, 23, 59, 0).replace(tzinfo=MSK)
         assert quote.trade_time == expected.timestamp()
 
+    def test_trade_time_crosses_a_weekend(self):
+        """A Monday-morning poll whose last trade was Friday's close (CODE_REVIEW §3.2):
+        a naive one-calendar-day rollback would land on Sunday, not Friday."""
+        payload = {
+            "marketdata": {
+                "columns": ["SECID", "LAST", "TIME", "SYSTIME"],
+                "data": [["SBER", 273.0, "18:50:00", "2026-10-05 10:00:00"]],  # Mon 2026-10-05
+            },
+            "securities": {"columns": ["SECID"], "data": [["SBER"]]},
+        }
+        quote = extract_quotes(payload)["SBER"]
+        expected = datetime(2026, 10, 2, 18, 50, 0).replace(tzinfo=MSK)  # the preceding Friday
+        assert quote.trade_time == expected.timestamp()
+        assert quote.delay_seconds == pytest.approx(63 * 3600 + 10 * 60, abs=1)
+
 
 class TestExtractInstruments:
     def test_fields_are_mapped(self):
@@ -190,6 +205,30 @@ class TestMoexClient:
         client = MoexClient(transport=httpx.MockTransport(handler), retries=0)
         with pytest.raises(UpstreamError):
             await client.get_quotes(["SBER"])
+        await client.aclose()
+
+    async def test_get_instruments_wraps_extract_instruments(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=load("moex_instrument.json"))
+
+        client = MoexClient(transport=httpx.MockTransport(handler), retries=0)
+        instruments = await client.get_instruments(["SBER"])
+        assert instruments["SBER"].name == "Сбербанк"
+        await client.aclose()
+
+    async def test_get_index_candles_hits_the_index_path(self):
+        seen_paths = []
+        empty = {"candles": {"columns": ["open", "close", "high", "low", "volume", "begin"], "data": []}}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen_paths.append(request.url.path)
+            body = load("moex_candles_daily.json") if len(seen_paths) == 1 else empty
+            return httpx.Response(200, json=body)
+
+        client = MoexClient(transport=httpx.MockTransport(handler))
+        candles = await client.get_index_candles("IMOEX", Interval.D1, start=date(2026, 9, 1))
+        assert len(candles) == 2
+        assert all("index" in p and "IMOEX" in p for p in seen_paths)
         await client.aclose()
 
     async def test_candles_paginate_until_empty_page(self):
